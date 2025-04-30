@@ -50,6 +50,9 @@ func main() {
 				fmt.Fprintf(os.Stderr, "Error reading file: %s\n", err)
 			}
 
+			data = []byte(fmt.Sprintf("blob %d\x00%s", len(data), data))
+			fileData, err := utils.CompressData(data)
+
 			hash, err := utils.GenerateHash(data)
 
 			if err != nil {
@@ -65,14 +68,10 @@ func main() {
 
 			of := hash[2:]
 
-			fileData, err := utils.CompressData(data)
-
-			fileContents := fmt.Sprintf("blob %d\x00%s", len(fileData), fileData)
-
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error reading file: %s\n", err)
 			}
-			if err := os.WriteFile(fmt.Sprintf("%s/%s", dir, of), []byte(fileContents), 0644); err != nil {
+			if err := os.WriteFile(fmt.Sprintf("%s/%s", dir, of), []byte(fileData), 0644); err != nil {
 				fmt.Fprintf(os.Stderr, "Error writing file: %s\n", err)
 			}
 
