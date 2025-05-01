@@ -106,9 +106,93 @@ func main() {
 
 			fmt.Fprintf(os.Stdout, resp)
 		}
+	case "ls-tree":
+
+		option := os.Args[2]
+
+		hash := os.Args[3]
+		path := fmt.Sprintf(".git/objects/%v/%v", hash[:2], hash[2:])
+
+		data, err := os.ReadFile(path)
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading file: %s\n", err)
+		}
+
+		strData, err := utils.UnCompressData(data)
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error Uncompressing file: %s\n", err)
+		}
+
+		strData = strings.SplitAfterN(strData, "\x00", 2)[1]
+
+		treeObjects := ParseTreeObject([]byte(strData))
+		res := ""
+		if option == "--name-only" {
+			for _, item := range treeObjects {
+				res += fmt.Sprintln(item.Name)
+			}
+		} else {
+			for _, item := range treeObjects {
+				res += fmt.Sprintf("%s %s %s %s\n", item.Mode, ObjectType[item.Mode], item.Hash, item.Name)
+				//  fmt.Sprintf("%s\n", item.Name)
+			}
+		}
+
+		fmt.Fprint(os.Stdout, strings.TrimPrefix(res, "\n"))
 
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command %s\n", command)
 		os.Exit(1)
 	}
+}
+
+var ObjectType = map[string]string{
+	"100644": "blob", // normal file
+	"100755": "file", // executable file
+	"120000": "link", // symbolic link
+	"40000":  "dir",  // directory (note: Git drops the leading zero)
+}
+
+type TreeObject struct {
+	Mode string
+	Hash string
+	Name string
+}
+
+func ParseTreeObject(data []byte) []TreeObject {
+	res := make([]TreeObject, 1)
+
+	i := 0
+	for i < len(data) {
+		// 1. Read mode (up to space)
+		start := i
+		for data[i] != ' ' {
+			i++
+		}
+		mode := string(data[start:i])
+		i++ // skip space
+
+		// 2. Read filename (up to null byte)
+		start = i
+		for data[i] != 0 {
+			i++
+		}
+		filename := string(data[start:i])
+		i++ // skip null byte
+
+		// 3. Read 20-byte SHA-1 (binary), convert to hex
+		if i+20 > len(data) {
+			fmt.Println("Invalid tree format: not enough bytes for SHA-1")
+			return res
+		}
+		sha1bin := data[i : i+20]
+		sha1hex := fmt.Sprintf("%x", sha1bin)
+		i += 20
+
+		res = append(res, TreeObject{mode, sha1hex, filename})
+	}
+
+	return res
 }
